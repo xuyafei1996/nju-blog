@@ -1,124 +1,184 @@
-# nju-blog Hexo 博客项目指南
+# Hexo 静态博客全方位搭建指南
 
-这份指南是根据本项目（`nju-blog`）的实际环境和配置整理的最新操作手册，涵盖了从环境修复到日常写作发布的完整流程。
-
-## 一、项目概况
-
-*   **项目名称**：nju-blog
-*   **仓库地址**：[https://github.com/xuyafei1996/nju-blog](https://github.com/xuyafei1996/nju-blog)
-*   **博客网址**：[https://xuyafei1996.github.io/nju-blog/](https://xuyafei1996.github.io/nju-blog/)
-*   **当前分支**：`master`
+本指南旨在提供一套通用的、现代化的 Hexo 博客搭建流程，融合了基础概念、环境配置、自动化部署（CI/CD）以及常见踩坑解决方案。
 
 ---
 
-## 二、首次运行与环境恢复
+## 一、Hexo 概念与原理
 
-如果你是刚接手这个项目，或者换了电脑，请按照以下步骤初始化环境。
-
-### 1. 安装基础工具
-确保电脑已安装：
-*   **Node.js** (建议 v18 或 v20 LTS)
-*   **Git**
-
-### 2. 安装依赖 (关键步骤)
-本项目由于部分插件依赖较旧，**必须**使用 `--legacy-peer-deps` 参数安装，否则会报错。
-
-在项目根目录 (`c:\Develop\my-blog`) 打开终端执行：
-
-```powershell
-# 推荐：同时使用淘宝镜像源加速
-npm install --legacy-peer-deps --registry=https://registry.npmmirror.com
-```
-
-> **常见报错处理**：
-> 如果遇到 `Cannot read properties of null` 或其他奇怪的 npm 报错，请执行以下命令彻底清理后重试：
-> ```powershell
-> Remove-Item -Recurse -Force node_modules
-> Remove-Item -Force package-lock.json
-> npm cache clean --force
-> npm install --legacy-peer-deps
-> ```
+**Hexo** 是一个快速、简洁且高效的博客框架。
+*   **原理**：它基于 Node.js，将 Markdown 文档解析并渲染成静态网页（HTML/CSS/JS）。
+*   **优势**：
+    *   **极速**：静态页面加载速度快，利于 SEO。
+    *   **免费**：可托管在 GitHub Pages、Vercel 等平台，无需服务器成本。
+    *   **扩展**：拥有丰富的主题和插件生态。
 
 ---
 
-## 三、本地写作与预览
+## 二、环境准备 (Prerequisites)
 
-### 1. 启动本地服务器
-```powershell
-npx hexo s
+在开始之前，请确保你的电脑已安装以下工具。
+
+### 1. 核心工具
+*   **Node.js** (运行环境)：建议安装 **LTS (长期支持版)**，如 Node 18 或 20。
+    *   验证：`node -v`, `npm -v`
+*   **Git** (版本控制)：用于管理代码和推送发布。
+    *   验证：`git --version`
+
+### 2. ⚡ 进阶配置（强烈推荐）
+
+#### 2.1 使用 NVM 管理 Node 版本
+为了避免版本冲突，建议使用 **NVM** (Node Version Manager) 管理 Node 版本。
+*   **常用命令**：
+    ```bash
+    nvm install lts      # 安装最新 LTS
+    nvm use lts          # 切换版本
+    ```
+
+#### 2.2 配置国内镜像源
+解决 npm 下载慢或卡顿的问题：
+```bash
+# 永久配置淘宝镜像源
+npm config set registry https://registry.npmmirror.com
 ```
-或者
-```powershell
-npx hexo server
-```
-
-### 2. 预览文章
-启动成功后，访问以下地址（注意后缀）：
-👉 **http://localhost:4000/nju-blog/**
-
-> **注意**：由于我们在 `_config.yml` 中配置了 `root: /nju-blog/`，所以本地访问必须带上这个后缀，否则样式和图片会加载失败。
-
-### 3. 新建文章
-```powershell
-npx hexo new "文章标题"
-```
-文件会生成在 `source/_posts/文章标题.md`。
 
 ---
 
-## 四、发布上线 (GitHub Actions)
+## 三、安装与本地使用
 
-本项目已配置自动化部署（CI/CD），你**不需要**手动运行 `hexo d`。
+### 1. 初始化项目
+推荐使用 `npx` 运行 Hexo，无需全局安装，避免污染环境。
 
-### 1. 发布步骤
-只需将源码推送到 GitHub 的 `master` 分支：
+```bash
+# 初始化博客目录
+npx hexo-cli init my-blog
 
-```powershell
-# 1. 添加修改
-git add .
-
-# 2. 提交修改
-git commit -m "写了一篇新文章: 标题"
-
-# 3. 推送到远程
-git push
+# 进入目录
+cd my-blog
 ```
 
-### 2. 等待部署
-1.  推送后，GitHub Actions 会自动触发构建。
-2.  等待约 1-2 分钟。
-3.  访问 [https://xuyafei1996.github.io/nju-blog/](https://xuyafei1996.github.io/nju-blog/) 查看更新。
+### 2. 安装依赖 (⚠️ 关键点)
+由于 Hexo 部分插件依赖较旧，**必须**加上兼容参数，否则容易报错。
+
+```bash
+npm install --legacy-peer-deps
+```
+
+### 3. 本地预览与写作
+*   **启动服务器**：
+    ```bash
+    npx hexo s
+    # 访问 http://localhost:4000
+    ```
+*   **新建文章**：
+    ```bash
+    npx hexo new "文章标题"
+    # 文件生成在 source/_posts/文章标题.md
+    ```
 
 ---
 
-## 五、关键配置说明 (已修复)
+## 四、GitHub 自动化部署 (GitHub Actions)
 
-以下是我们在搭建过程中修复的关键配置，了解这些有助于你排查未来可能遇到的问题。
+传统的 `hexo d` 本地部署方式容易因环境问题失败，**强烈推荐**使用 GitHub Actions 实现云端自动构建和发布。
 
-### 1. 站点配置文件 `_config.yml`
-为了适配 GitHub Pages 的子目录项目（`nju-blog`），必须配置：
+### 1. 准备工作
+1.  在 GitHub 创建一个仓库（公开库）。
+2.  将本地代码推送到该仓库。
+
+### 2. 配置自动化脚本
+在项目根目录创建文件：`.github/workflows/deploy.yml` (**注意：workflows 目录必须是复数**)
 
 ```yaml
-# 这里的 URL 是 GitHub Pages 的访问地址
-url: https://xuyafei1996.github.io/nju-blog
-# 这里的 root 是项目在域名下的子路径
-root: /nju-blog/
-```
-*如果不配置 `root`，会导致 CSS 样式丢失，页面一片空白。*
+name: Deploy Hexo Blog
 
-### 2. 自动化部署脚本 `.github/workflows/deploy.yml`
-*   **目录修正**：脚本必须放在 `.github/workflows/` (复数) 目录下，之前因为写成 `workflow` 导致无法触发。
-*   **分支匹配**：脚本中配置了监听 `master` 分支的 push 事件。
-*   **权限设置**：配置了 `permissions: contents: read, pages: write, id-token: write` 以允许 Actions 推送静态文件。
+on:
+  push:
+    branches:
+      - main  # 或者是 master，取决于你的主分支名
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install & Build
+        run: |
+          npm install --legacy-peer-deps
+          npx hexo generate
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./public
+
+      - name: Deploy to GitHub Pages
+        uses: actions/deploy-pages@v4
+```
+
+### 3. 开启 GitHub Pages
+1.  进入 GitHub 仓库 -> **Settings** -> **Pages**。
+2.  **Build and deployment** -> **Source** 选择 **GitHub Actions**。
 
 ---
 
-## 六、常用命令速查表
+## 五、关键配置：子目录部署
 
-| 场景 | 命令 | 说明 |
-| :--- | :--- | :--- |
-| **安装依赖** | `npm install --legacy-peer-deps` | **必用**，解决依赖冲突 |
-| **清理缓存** | `hexo clean` | 样式错乱时优先执行 |
-| **本地预览** | `npx hexo s` | 访问 localhost:4000/nju-blog/ |
-| **新建文章** | `npx hexo new "标题"` | 生成 md 文件 |
-| **生成静态文件** | `npx hexo g` | (通常不需要手动跑，Actions 会跑) |
+如果你的仓库名**不是** `username.github.io`（例如 `nju-blog`），你的博客地址会是 `https://username.github.io/nju-blog/`。
+
+**必须修改 `_config.yml`，否则页面会白屏或样式丢失：**
+
+```yaml
+# 1. 设置完整 URL
+url: https://你的用户名.github.io/你的仓库名
+
+# 2. 设置根路径 (非常重要！)
+root: /你的仓库名/
+```
+*   **注意**：配置了 `root` 后，本地预览也需要访问 `http://localhost:4000/你的仓库名/`。
+
+---
+
+## 六、场景 QA 与排坑指南
+
+### Q1: `npm install` 报错 `ERESOLVE overriding peer dependency`
+*   **原因**：npm 7+ 对依赖版本检查严格，Hexo 插件生态中存在旧版本依赖。
+*   **解决**：始终带上 `--legacy-peer-deps` 参数。
+    ```bash
+    npm install --legacy-peer-deps
+    ```
+
+### Q2: 报错 `Cannot read properties of null` 或莫名其妙的报错
+*   **原因**：`node_modules` 损坏或缓存问题。
+*   **解决**：执行“核弹级”清理命令：
+    ```powershell
+    # Windows PowerShell
+    Remove-Item -Recurse -Force node_modules
+    Remove-Item -Force package-lock.json
+    npm cache clean --force
+    npm install --legacy-peer-deps
+    ```
+
+### Q3: 代码推送了，但 GitHub Actions 没触发
+*   **原因**：目录名错误。
+*   **检查**：确保配置文件在 `.github/workflows/` 下，而不是 `.github/workflow/`。
+
+### Q4: 部署成功，但打开网页一片空白/样式乱了
+*   **原因**：`_config.yml` 中的 `root` 配置错误。
+*   **解决**：如果部署在子目录（如 `/blog/`），必须设置 `root: /blog/`。
+
+### Q5: 想要自定义域名
+1.  在 `source/` 目录下创建 `CNAME` 文件（无后缀），内容为你的域名（如 `blog.example.com`）。
+2.  在 `_config.yml` 中修改 `url` 为你的自定义域名，并将 `root` 改回 `/`。
