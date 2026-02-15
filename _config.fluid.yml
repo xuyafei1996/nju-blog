@@ -1,0 +1,5 @@
+post:
+  math:
+    enable: true
+    specific: false
+    engine: mathjax

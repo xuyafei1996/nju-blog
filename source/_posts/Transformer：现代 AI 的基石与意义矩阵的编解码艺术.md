@@ -39,6 +39,7 @@ Transformer 是 Google 团队在 2017 年论文《Attention Is All You Need》�
 5.  **大模型时代 (2020+)**：Decoder-only 架构因其训练稳定性与涌现能力，成为 ChatGPT 等 LLM 的首选。
 
 ## 核心模块
+![Transformer 架构图](/img/illustration/transformer.png)
 1.  **Encoder (编码器)**：
     - **作用**：负责“理解”。将输入序列转化为富含语义的上下文向量 (Context Vector)。
     - **结构**：Self-Attention + Feed Forward Network (FFN)，层层堆叠，双向可见。
@@ -57,10 +58,12 @@ Transformer 的 Encoder 和 Decoder 既可合体 (如机器翻译)，亦可独�
     - **代表**：BERT, RoBERTa。
     - **训练**：Masked Language Modeling (完形填空)。随机遮盖词，让模型猜。
     - **应用**：情感分析、文本分类、命名实体识别。
+    - ![Encoder-only 架构图](/img/illustration/encode-only.png)
 2.  **Decoder-only (生成流)**：
     - **代表**：GPT 系列, LLaMA。
     - **训练**：Causal Language Modeling (文本接龙)。根据上文预测下文。
     - **应用**：对话生成、代码补全、创意写作。
+    - ![Decoder-only 架构图](/img/illustration/decode-only.png)
 3.  **Encoder-Decoder (互译流)**：
     - **代表**：T5, BART。
     - **应用**：机器翻译、文本摘要。
