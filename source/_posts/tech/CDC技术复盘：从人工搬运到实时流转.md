@@ -27,11 +27,47 @@ tags:
 
 ---
 
+## 零、痛点：为什么需要CDC
+
+### 传统数据同步的困境
+
+10 个应用都需要知道数据库的变化，最笨的办法是什么？每个应用都去轮询数据库，或者写触发器、监听 API。结果：
+
+- 数据库被 10 个应用轮询，压力暴增
+- 触发器写死在数据库里，改一个逻辑要改所有表
+- 不同数据库的 API 完全不一样，每换一个数据库就要重写一遍代码
+- 传统的全量抽取（ETL）太慢、太笨重，且对业务数据库压力巨大
+- **最要命的是双写问题**：应用先写数据库，再写缓存/搜索索引，两步之间没有事务保证，要么缓存丢了，要么索引慢了，数据永远不一致
+
+### 小团队的解耦困境
+
+在小型项目或初创团队中，经常会遇到这样的场景：
+
+> **"业务逻辑需要解耦异步，但又不想引入 Kafka/RabbitMQ 这样的重量级消息中间件——部署成本高、运维复杂、团队学习曲线陡峭..."**
+
+传统解决方案：要么硬编码调用（模块间强耦合），要么引入消息队列（架构变重）。
+
+**CDC 提供了第三条路**：通过监听数据库变更，CDC 能把一次数据写入（如订单创建）自动转化为事件，供其他模块消费。不需要修改业务代码，不需要部署消息中间件，**数据库本身就是最轻量的事件源**。
+
+```
+订单服务写数据库 → CDC 捕获变更 → 库存服务/通知服务消费事件
+```
+
+这种方案特别适合：
+- 不想维护消息队列的小团队
+- 已有数据库，希望物尽其用的项目
+- 从单体向微服务过渡的渐进式架构演进
+
+---
+
 ## 一、CDC是什么
 
 **定义**：CDC(Change Data Capture)捕获DB的Insert/Update/Delete变更。
 
-**核心机制**：
+**核心思想**：别去问数据库"改了什么"，而是让数据库自己"说"。
+
+MySQL 有 binlog，PostgreSQL 有 WAL，MongoDB 有 Oplog，Oracle 有 Redo Log。这些日志本来就是为了数据恢复和复制设计的，记录了所有已提交的更改。CDC 工具就像一个监听器，实时读取这些日志，把每一条变更变成一个事件。
+
 ```
 DB写入 → binlog/WAL/Redo Log → CDC工具 → 事件流
 ```
@@ -65,6 +101,9 @@ SELECT * FROM table WHERE update_time > last_sync_time
 MySQL Master → binlog → Canal → 消息队列
 ```
 ![](./img/cannal架构.png)
+
+Canal 通过伪装成 Slave，发送 Dump 协议，获取 Master 的 binlog 并翻译二进制字节，完成 CDC。这种设计让它对 MySQL 的支持极致高效，但也注定了它无法跨出 MySQL 的圈子。
+
 ● 性能极高，毫秒级延迟
 ● 无侵入，不改表结构
 ○ 仅支持MySQL/MariaDB
@@ -114,6 +153,18 @@ DB → Debezium → Kafka Topic ← 服务A
 DB → Debezium Server → Kinesis/PubSub/Pulsar/RabbitMQ/HTTP
 ```
 
+支持的 Sink 类型：
+
+| Sink 类型 | 适用场景 |
+|-----------|----------|
+| Amazon Kinesis | AWS 云原生环境 |
+| Google Pub/Sub | GCP 云原生环境 |
+| Apache Pulsar | 云原生消息队列 |
+| RabbitMQ | 传统消息队列替代方案 |
+| HTTP/REST | 直接调用微服务接口 |
+| Redis Streams | 轻量级流处理 |
+| Apache Kafka | 兼容原有 Kafka 生态 |
+
 配置示例：
 ```yaml
 debezium:
@@ -137,7 +188,7 @@ public DebeziumEngine<ChangeEvent<String, String>> debeziumEngine() {
     props.setProperty("connector.class", "io.debezium.connector.mysql.MySqlConnector");
     props.setProperty("table.include.list", "inventory.orders");
     // props.setProperty配置db连接（略）
-    
+
     return DebeziumEngine.create(Json.class)
         .using(props)
         .notifying(record -> processEvent(record))
@@ -165,6 +216,18 @@ public DebeziumEngine<ChangeEvent<String, String>> debeziumEngine() {
 Flink CDC：MySQL → Flink CDC → 目标存储
 ```
 
+典型应用——实时关联查询：
+```sql
+-- 实时关联用户表和订单表，生成宽表
+SELECT
+    u.id, u.name, u.email,
+    COUNT(o.id) as order_count,
+    SUM(o.amount) as total_amount
+FROM users u
+LEFT JOIN orders o ON u.id = o.user_id
+GROUP BY u.id, u.name, u.email;
+```
+
 ● 极简架构，无Kafka中转
 ● 流批一体
 ○ 需Flink知识
@@ -172,6 +235,8 @@ Flink CDC：MySQL → Flink CDC → 目标存储
 ---
 
 ## 三、全方位对比
+
+### 核心对比
 
 | 维度 | Canal | Debezium | Flink CDC |
 |-----|-------|----------|-----------|
@@ -182,7 +247,32 @@ Flink CDC：MySQL → Flink CDC → 目标存储
 | 数据加工 | ○无 | ○无 | ●强(Join/聚合/清洗) |
 | 部署复杂度 | 低 | 高 | 中 |
 
+### 数据源支持
+
+| 数据库 | Canal | Debezium | Flink CDC |
+|--------|-------|----------|-----------|
+| MySQL | ● | ● | ● |
+| MariaDB | ● | ● | ● |
+| PostgreSQL | ○ | ● | ● |
+| Oracle | ○ | ● | ● |
+| SQL Server | ○ | ● | ● |
+| MongoDB | ○ | ● | ● |
+| TiDB | ○ | ○ | ● |
+| DB2 | ○ | ● | ○ |
+
+### 功能特性对比
+
+| 功能 | Canal | Debezium | Flink CDC |
+|------|-------|----------|-----------|
+| DDL 捕获 | 部分支持 | ● 完整支持 | ● 完整支持 |
+| 断点续传 | ● | ● | ● |
+| 多表订阅 | ● | ● | ● |
+| 数据过滤 | 简单 | 中等 | 强大 |
+| 格式转换 | JSON/Protobuf | JSON/Avro/Protobuf | 灵活自定义 |
+| 监控指标 | 基础 | 完善 | 完善 |
+
 ![](./img/CDC方案.png)
+
 ---
 
 ## 四、数据一致性语义
@@ -193,7 +283,7 @@ Flink CDC：MySQL → Flink CDC → 目标存储
 | At-Least-Once | 不丢失，可能重复 | 大多数业务 | 中 |
 | Exactly-Once | 不丢失，不重复 | 金融交易 | 高 |
 
-**工程建议**：At-Least-Once + 消费者幂等，是最优解。
+**工程建议**：At-Least-Once + 消费者幂等，是最优解。绝大多数业务场景选择此方案即可。只有在极少数对重复零容忍的场景（如资金交易），才值得为 Exactly-Once 付出性能和复杂度的代价。
 
 幂等实现：
 ```java
@@ -357,6 +447,20 @@ public void onOrderCreated(OrderCreatedEvent event) {
 }
 ```
 
+### 实践四：实时数仓构建
+
+**架构**：
+```
+业务数据库(MySQL/Oracle) → Flink CDC → 实时清洗/关联 → ClickHouse/Doris
+                                    ↓
+                              实时大屏/报表
+```
+
+**优势**：
+- 分钟级延迟的实时分析
+- 无需 T+1 等待
+- 支持实时决策
+
 ---
 
 ## 七、结语
@@ -377,8 +481,17 @@ CDC本质是平衡**实时性**、**一致性**与**系统复杂性**。
 4. 从简单开始，渐进式演进
 5. CDC可作为MQ"前置方案"，避免过度设计
 
+### CDC未来趋势
+
+- **云原生化**：与 Kubernetes 深度集成，自动扩缩容
+- **无服务器化**：Serverless CDC，按需付费
+- **实时数仓标配**：CDC 将成为实时数仓的标准组件
+- **Schema Registry**：统一的 Schema 管理，更好的兼容性
+
 ---
 
 **CDC不是什么新技术，只是把DB本来就在做的事情(记录变更日志)，用更优雅的方式暴露出来。**
 
 理解CDC的本质，比学会使用某个工具更重要。
+
+当我们设计微服务时（服务间通过事件通信），当我们设计CQRS时（写侧和读侧通过事件连接），当我们设计事件溯源时（所有状态变更都是事件），依然在沿用这套伟大的设计哲学——**数据变更即事件**。
